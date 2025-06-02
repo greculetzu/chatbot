@@ -12,6 +12,8 @@ async def chat_handler(websocket: WebSocket):
     session_slots = {}
     awaiting_confirmation = False
     awaiting_quantity_for_alternative = False
+    awaiting_delivery = False
+    awaiting_name = False
     pending_order = {}
     alternative_product = None
 
@@ -19,7 +21,7 @@ async def chat_handler(websocket: WebSocket):
         try:
             user_msg = await websocket.receive_text()
 
-            # ✅ CONFIRMARE FINALĂ
+            # ✅ Confirmare finală
             if awaiting_confirmation:
                 if user_msg.lower() in ["yes", "y", "confirm"]:
                     save_order_to_firestore(pending_order)
@@ -30,26 +32,48 @@ async def chat_handler(websocket: WebSocket):
                     )
                     await websocket.send_text("✅ Thank you! Your order has been placed successfully.")
                 else:
-                    await websocket.send_text("❌ Order cancelled. Let me know if you'd like to start over.")
+                    await websocket.send_text("❌ Order cancelled.")
                 awaiting_confirmation = False
+                awaiting_delivery = False
+                awaiting_name = False
                 session_slots.clear()
                 pending_order.clear()
                 continue
 
-            # ✅ Cantitate alternativă
+            # ✅ Cantitate pentru produs alternativ
             if awaiting_quantity_for_alternative:
-                try:
-                    quantity = int(user_msg)
-                    pending_order["quantity"] = str(quantity)
+                if user_msg.isdigit():
+                    pending_order["quantity"] = user_msg
                     awaiting_quantity_for_alternative = False
-                    reply = "Ok, let's finish your order. I just need a few more details. How would you like the order delivered? For example, courier or pickup."
-                    await websocket.send_text(reply)
+                    awaiting_delivery = True
+                    await websocket.send_text("How would you like the order delivered? For example, courier or pickup.")
                     continue
-                except ValueError:
-                    await websocket.send_text("Please enter a valid number for quantity.")
+                else:
+                    await websocket.send_text("Please enter a valid number.")
                     continue
 
-            # ✅ Normal flow Lex
+            # ✅ Metodă de livrare
+            if awaiting_delivery:
+                pending_order["delivery_method"] = user_msg
+                awaiting_delivery = False
+                awaiting_name = True
+                await websocket.send_text("Can I have your name for the delivery?")
+                continue
+
+            # ✅ Nume client
+            if awaiting_name:
+                pending_order["customer_name"] = user_msg
+                awaiting_name = False
+                awaiting_confirmation = True
+                reply = (
+                    f"Just to confirm: you're ordering {pending_order['quantity']} {pending_order['category']} "
+                    f"from {pending_order['brand']} at ${pending_order['price']} each, delivered via "
+                    f"{pending_order['delivery_method']}, for {pending_order['customer_name']}. Is that correct?"
+                )
+                await websocket.send_text(reply)
+                continue
+
+            # ✅ Normal Lex flow
             lex_response = get_lex_response(user_id="client1", message=user_msg)
             messages = lex_response.get("messages", [])
             reply = "\n".join([msg.get("content", "") for msg in messages]) or "(No reply)"
@@ -61,35 +85,31 @@ async def chat_handler(websocket: WebSocket):
                 if slot_data and "value" in slot_data:
                     session_slots[slot_name] = slot_data["value"]["interpretedValue"]
 
-            # ✅ Intentul CautaProdus
+            # ✅ Intent CautaProdus
             if intent == "CautaProdus":
-                required_slots = ["category", "brand", "max_price", "quantity"]
-                if all(slot in session_slots for slot in required_slots):
-                    products = find_matching_products(
-                        session_slots["category"],
-                        session_slots["brand"],
-                        session_slots["max_price"],
-                        session_slots["quantity"]
-                    )
+                required = ["category", "brand", "max_price", "quantity"]
+                if all(slot in session_slots for slot in required):
+                    category = session_slots["category"]
+                    brand = session_slots["brand"]
+                    max_price = session_slots["max_price"]
+                    quantity = session_slots["quantity"]
+
+                    products = find_matching_products(category, brand, max_price, quantity)
                     if products:
                         first = products[0]
-                        reply = (
-                            f"We found {session_slots['quantity']} {first['category'].lower()} from {first['brand'].lower()} "
-                            f"at ${first['price']}. Would you like to place the order?"
-                        )
                         pending_order = {
-                            "brand": session_slots["brand"],
-                            "category": session_slots["category"],
-                            "quantity": session_slots["quantity"],
-                            "max_price": session_slots["max_price"]
+                            "brand": brand,
+                            "category": category,
+                            "quantity": quantity,
+                            "price": first["price"]
                         }
-                        awaiting_confirmation = True
-                    else:
-                        # ✅ Căutăm alternative
-                        alternatives = find_alternative_products(
-                            session_slots["category"],
-                            session_slots["brand"]
+                        reply = (
+                            f"We found {quantity} {category} from {brand} at ${first['price']}. "
+                            "Would you like to place the order?"
                         )
+                        awaiting_delivery = True
+                    else:
+                        alternatives = find_alternative_products(category, brand, max_price)
                         if alternatives:
                             best = alternatives[0]
                             alternative_product = best
@@ -99,34 +119,14 @@ async def chat_handler(websocket: WebSocket):
                                 "price": best["price"]
                             }
                             reply = (
-                                f"Sorry, we couldn't find an exact match for {session_slots['quantity']} items under ${session_slots['max_price']}, "
-                                f"but we do have {best['quantity']} {best['category']} from {best['brand']} at ${best['price']}. Would you like that instead?"
+                                f"Sorry, we couldn't find an exact match for {quantity} items under ${max_price}, "
+                                f"but we do have {best['quantity']} {best['category']} from {best['brand']} "
+                                f"at ${best['price']}. Would you like that instead?"
                             )
-                            session_slots["category"] = best["category"]
-                            session_slots["brand"] = best["brand"]
-                            session_slots["max_price"] = str(best["price"])
                         else:
-                            reply = "Sorry, we couldn't find anything matching. Would you like to try a different category or brand?"
+                            reply = "Sorry, no alternative products available."
 
-            elif intent == "PlaseazaComanda":
-                required = ["brand", "category", "quantity", "max_price", "customer_name", "delivery_method"]
-                if all(slot in session_slots for slot in required):
-                    pending_order = {
-                        "brand": session_slots["brand"],
-                        "category": session_slots["category"],
-                        "quantity": session_slots["quantity"],
-                        "max_price": session_slots["max_price"],
-                        "customer_name": session_slots["customer_name"],
-                        "delivery_method": session_slots["delivery_method"]
-                    }
-                    awaiting_confirmation = True
-                    reply = (
-                        f"Just to confirm: you're ordering {pending_order['quantity']} {pending_order['category']} from {pending_order['brand']} "
-                        f"at max ${pending_order['max_price']}, delivered via {pending_order['delivery_method']}, for {pending_order['customer_name']}. "
-                        f"Is that correct?"
-                    )
-
-            # ✅ dacă tocmai am acceptat alternativa, cerem cantitatea
+            # ✅ Acceptare sugestie alternativă
             if alternative_product and user_msg.lower() in ["yes", "y", "confirm"]:
                 awaiting_quantity_for_alternative = True
                 alternative_product = None
@@ -136,5 +136,5 @@ async def chat_handler(websocket: WebSocket):
             await websocket.send_text(reply)
 
         except Exception as e:
-            print("Conexiune WebSocket închisă sau eroare:", e)
+            print("❌ Eroare WebSocket:", e)
             break
