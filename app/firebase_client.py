@@ -14,31 +14,41 @@ def save_order_to_firestore(order_data: dict):
     except Exception as e:
         print("❌ Eroare la salvarea comenzii:", e)
 
-def update_product_stock(category, brand, quantity_to_subtract):
+def update_product_quantity(category, brand, quantity_to_deduct):
     try:
-        query = db.collection("products")
-        query = query.where("category", "==", category).where("brand", "==", brand)
-        result = query.stream()
-        for doc in result:
-            product_ref = db.collection("products").document(doc.id)
+        query = db.collection("products")\
+            .where("category", "==", category)\
+            .where("brand", "==", brand)
+        docs = list(query.stream())
+        if docs:
+            doc = docs[0]
             data = doc.to_dict()
-            new_quantity = data["quantity"] - int(quantity_to_subtract)
-            product_ref.update({"quantity": new_quantity})
-            print("✅ Stoc actualizat în Firestore!")
+            new_quantity = max(0, data["quantity"] - quantity_to_deduct)
+            db.collection("products").document(doc.id).update({"quantity": new_quantity})
+            print(f"🛒 Stoc actualizat: {data['quantity']} → {new_quantity}")
     except Exception as e:
         print("❌ Eroare la actualizarea stocului:", e)
 
-def find_matching_products(category, brand, max_price):
+def find_matching_products(category, brand, max_price, quantity):
     try:
-        query = db.collection("products")
-        if category:
-            query = query.where("category", "==", category)
-        if brand:
-            query = query.where("brand", "==", brand)
-        if max_price:
-            query = query.where("price", "<=", float(max_price))
+        query = db.collection("products")\
+            .where("category", "==", category)\
+            .where("brand", "==", brand)\
+            .where("price", "<=", float(max_price))\
+            .where("quantity", ">=", int(quantity))
         results = query.stream()
         return [doc.to_dict() for doc in results]
     except Exception as e:
         print("❌ Eroare la căutarea produselor:", e)
+        return []
+
+def find_alternative_products(category, brand):
+    try:
+        query = db.collection("products")\
+            .where("category", "==", category)\
+            .where("brand", "==", brand)
+        results = query.stream()
+        return [doc.to_dict() for doc in results]
+    except Exception as e:
+        print("❌ Eroare la căutarea alternativelor:", e)
         return []
