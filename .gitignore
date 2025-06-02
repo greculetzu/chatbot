@@ -1,0 +1,33 @@
+﻿# Node.js / npm
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+*.env
+.env
+
+# VS / VSCode
+.vs/
+.vscode/
+*.vsidx
+
+# Sistem
+.DS_Store
+Thumbs.db
+
+# Firestore key (dacă nu e publică)
+firebase_key.json
+
+# Compilări SCSS (opțional)
+*.css.map
+
+# Cache
+
+.env
+app/firebase_key.json
+

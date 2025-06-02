@@ -1,0 +1,79 @@
+﻿/* Reset general */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Fundal și font */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
+    color: #333;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Titlu */
+h2 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    font-size: 28px;
+}
+
+/* Chatbox */
+#log {
+    width: 100%;
+    max-width: 600px;
+    height: 400px;
+    overflow-y: auto;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+    /* Mesaje */
+    #log p {
+        margin: 10px 0;
+        line-height: 1.5;
+    }
+
+    #log b {
+        color: #1f6feb;
+    }
+
+/* Input + Buton */
+input#msg {
+    width: 70%;
+    max-width: 450px;
+    padding: 10px 15px;
+    font-size: 16px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    margin-right: 10px;
+    transition: border-color 0.3s;
+}
+
+    input#msg:focus {
+        border-color: #1f6feb;
+        outline: none;
+    }
+
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #1f6feb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+    button:hover {
+        background-color: #155ab6;
+    }
