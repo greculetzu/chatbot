@@ -16,8 +16,8 @@ def save_order_to_firestore(order_data: dict):
 
 def update_product_quantity(category, brand, quantity_to_deduct):
     try:
-        query = db.collection("products") \
-            .where("category", "==", category) \
+        query = db.collection("products")\
+            .where("category", "==", category)\
             .where("brand", "==", brand)
         docs = list(query.stream())
         if docs:
@@ -31,25 +31,24 @@ def update_product_quantity(category, brand, quantity_to_deduct):
 
 def find_matching_products(category, brand, max_price, quantity):
     try:
-        query = db.collection("products") \
-            .where("category", "==", category) \
-            .where("brand", "==", brand) \
-            .where("price", "<=", float(max_price)) \
+        query = db.collection("products")\
+            .where("category", "==", category)\
+            .where("brand", "==", brand)\
+            .where("price", "<=", float(max_price))\
             .where("quantity", ">=", int(quantity))
-        results = query.stream()
-        return [doc.to_dict() for doc in results]
+        return [doc.to_dict() for doc in query.stream()]
     except Exception as e:
         print("❌ Eroare la căutarea produselor:", e)
         return []
 
 def find_alternative_products(category, brand, max_price):
     try:
-        query = db.collection("products") \
-            .where("category", "==", category) \
-            .where("brand", "==", brand) \
-            .where("quantity", ">", 0)
-        results = query.stream()
-        return [doc.to_dict() for doc in results]
+        query = db.collection("products")\
+            .where("category", "==", category)\
+            .where("brand", "==", brand)\
+            .where("quantity", ">", 0)\
+            .where("price", "<=", float(max_price) + 500)
+        return [doc.to_dict() for doc in query.stream()]
     except Exception as e:
         print("❌ Eroare la căutarea alternativelor:", e)
         return []
